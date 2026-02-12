@@ -1,0 +1,16 @@
+{
+  "name": "@skunkglobal/cli",
+  "version": "1.0.0",
+  "description": "Install and manage Skunk Global skills for OpenClaw",
+  "bin": {
+    "skunk": "./bin/skunk.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skunkceo/skunk-cli"
+  },
+  "keywords": ["openclaw", "skills", "wordpress", "ai", "skunk"],
+  "author": "Skunk Global",
+  "license": "MIT",
+  "homepage": "https://skunkglobal.com/skills"
+}
