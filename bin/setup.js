@@ -241,24 +241,19 @@ async function main() {
   log('');
   log(`   ${colors.green}Your AI assistant now knows WordPress and Skunk!${colors.reset}`);
   log('');
-  log('   Next steps:');
+  log('   Start chatting with your AI:');
+  log('');
+  log(`      ${colors.cyan}"Create a new WordPress site called my-store"${colors.reset}`);
+  log(`      ${colors.cyan}"Install WooCommerce and set up a UK store"${colors.reset}`);
+  log(`      ${colors.cyan}"Install SkunkCRM"${colors.reset}`);
+  log(`      ${colors.cyan}"Create a contact form"${colors.reset}`);
   log('');
   
-  if (studioExists) {
-    log('   1. Create a WordPress site:');
-    log(`      ${colors.cyan}studio create my-site${colors.reset}`);
+  if (!studioExists) {
+    log(`   ${colors.yellow}Note: Install WordPress Studio first for local development${colors.reset}`);
     log('');
-    log('   2. Start chatting with your AI:');
-    log(`      ${colors.cyan}"Install WooCommerce"${colors.reset}`);
-    log(`      ${colors.cyan}"Install SkunkCRM"${colors.reset}`);
-    log(`      ${colors.cyan}"Create a contact form"${colors.reset}`);
-  } else {
-    log('   1. Install WordPress Studio');
-    log('   2. Create a site: studio create my-site');
-    log('   3. Chat with your AI to set up plugins');
   }
   
-  log('');
   log(`   ${colors.dim}Guide: https://skunkglobal.com/guides/openclaw-wordpress${colors.reset}`);
   log('');
 
