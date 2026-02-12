@@ -330,7 +330,12 @@ async function main() {
   }
 
   // WP-CLI (optional but recommended)
-  const wpVersion = getVersion('wp');
+  let wpVersion = null;
+  try {
+    wpVersion = execSync('wp --version --allow-root 2>/dev/null || wp --version 2>/dev/null', { encoding: 'utf8' }).trim().split('\n')[0];
+  } catch (e) {
+    // WP-CLI not installed
+  }
   if (wpVersion) {
     success(`WP-CLI ${wpVersion}`);
   } else {
