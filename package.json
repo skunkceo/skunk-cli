@@ -1,6 +1,6 @@
 {
   "name": "@skunkceo/cli",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Install and manage Skunk Global skills for OpenClaw",
   "bin": {
     "skunk": "./bin/skunk.js"

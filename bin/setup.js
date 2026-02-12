@@ -209,7 +209,16 @@ async function main() {
     const studioVersion = getVersion('studio');
     success(`WordPress Studio installed ${studioVersion ? `(${studioVersion})` : ''}`);
   } else {
-    warn('WordPress Studio not found (optional, for local WordPress dev)');
+    warn('WordPress Studio not found');
+    log('');
+    log('   WordPress Studio is amazing for local WordPress development.');
+    log('   Your AI can create and manage sites through it.');
+    log('');
+    log('   Install it from: https://developer.wordpress.org/studio/');
+    log('');
+    log('   macOS:  brew install --cask wordpress-studio');
+    log('   Other:  Download from the website');
+    log('');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
