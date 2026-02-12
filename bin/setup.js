@@ -280,7 +280,7 @@ async function main() {
   console.clear();
   
   // Show splash
-  log(colors.magenta + SKUNK_SIMPLE + colors.reset);
+  log(colors.magenta + SKUNK_LOGO + colors.reset);
   log(colors.bright + BRAND + colors.reset);
   log('');
   log(`${colors.dim}Welcome! Let's get your Skunk suite set up.${colors.reset}`);
