@@ -3,7 +3,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { execSync, spawn } = require('child_process');
+const { execSync } = require('child_process');
 const readline = require('readline');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -95,150 +95,9 @@ async function confirm(question, defaultYes = true) {
   return answer.toLowerCase().startsWith('y');
 }
 
-async function choice(question, options) {
-  log(question);
-  options.forEach((opt, i) => {
-    log(`  ${colors.cyan}${i + 1}${colors.reset}) ${opt.label}`);
-  });
-  const answer = await ask(`\nChoice (1-${options.length}): `);
-  const idx = parseInt(answer, 10) - 1;
-  if (idx >= 0 && idx < options.length) {
-    return options[idx].value;
-  }
-  return options[0].value; // default to first
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// License Validation
+// Skill Installation
 // ═══════════════════════════════════════════════════════════════════════════
-
-async function validateLicense(licenseKey, product) {
-  return new Promise((resolve) => {
-    const postData = JSON.stringify({
-      license_key: licenseKey.toUpperCase().trim(),
-      site_url: 'cli-setup', // Validation only, not activation
-    });
-
-    const options = {
-      hostname: 'skunkglobal.com',
-      port: 443,
-      path: '/api/license/validate',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'skunk-cli',
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.success && json.data && json.data.valid) {
-            resolve({
-              valid: true,
-              activationsLeft: json.data.max_sites ? json.data.max_sites - (json.data.active_sites || 0) : 'unlimited',
-              productsCovered: json.data.products_covered || [product],
-            });
-          } else {
-            resolve({ valid: false, error: json.message || 'Invalid license' });
-          }
-        } catch (e) {
-          resolve({ valid: false, error: 'Failed to validate license' });
-        }
-      });
-    });
-
-    req.on('error', () => {
-      resolve({ valid: false, error: 'Could not connect to license server' });
-    });
-
-    req.write(postData);
-    req.end();
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Installation Functions
-// ═══════════════════════════════════════════════════════════════════════════
-
-const PRODUCTS = [
-  {
-    name: 'SkunkCRM',
-    slug: 'skunkcrm',
-    skill: 'skunkcrm',
-    freeRepo: 'skunkceo/skunkcrm',
-    proSlug: 'skunkcrm-pro',
-  },
-  {
-    name: 'SkunkForms',
-    slug: 'skunkforms',
-    skill: 'skunkforms',
-    freeRepo: 'skunkceo/skunkforms',
-    proSlug: 'skunkforms-pro',
-  },
-  {
-    name: 'SkunkPages',
-    slug: 'skunkpages',
-    skill: 'skunkpages',
-    freeRepo: 'skunkceo/skunkpages',
-    proSlug: 'skunkpages-pro',
-  },
-];
-
-async function installPlugin(repo, pluginSlug, wpPath = null) {
-  const url = `https://github.com/${repo}/releases/latest/download/${pluginSlug}.zip`;
-  
-  // If WP path provided and wp-cli available, install directly
-  if (wpPath && commandExists('wp')) {
-    try {
-      log(`   Installing ${pluginSlug} to WordPress...`);
-      execSync(`wp plugin install "${url}" --path="${wpPath}"`, { stdio: 'pipe' });
-      return { status: 'installed', location: 'wordpress' };
-    } catch (e) {
-      // Fall through to cache
-    }
-  }
-  
-  // Otherwise, cache in ~/.skunk/plugins/ for later
-  const cacheDir = path.join(process.env.HOME, '.skunk', 'plugins');
-  fs.mkdirSync(cacheDir, { recursive: true });
-  
-  const zipPath = path.join(cacheDir, `${pluginSlug}.zip`);
-  
-  log(`   Downloading ${pluginSlug}...`);
-  
-  return new Promise((resolve) => {
-    const file = fs.createWriteStream(zipPath);
-    
-    https.get(url, { headers: { 'User-Agent': 'skunk-cli' } }, (res) => {
-      // Handle GitHub redirect
-      if (res.statusCode === 302 || res.statusCode === 301) {
-        https.get(res.headers.location, { headers: { 'User-Agent': 'skunk-cli' } }, (res2) => {
-          res2.pipe(file);
-          file.on('finish', () => {
-            file.close();
-            resolve({ status: 'cached', location: zipPath });
-          });
-        }).on('error', () => resolve({ status: 'failed' }));
-        return;
-      }
-      
-      if (res.statusCode !== 200) {
-        resolve({ status: 'failed', error: `HTTP ${res.statusCode}` });
-        return;
-      }
-      
-      res.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        resolve({ status: 'cached', location: zipPath });
-      });
-    }).on('error', () => resolve({ status: 'failed' }));
-  });
-}
 
 async function installSkill(skillName) {
   const skillsDir = path.join(process.env.HOME, '.openclaw', 'skills');
@@ -300,10 +159,10 @@ async function main() {
   // Show splash
   log(colors.bright + SKUNK_LOGO + colors.reset);
   log('');
-  log(`${colors.dim}Welcome! Let's get your Skunk suite set up.${colors.reset}`);
+  log(`${colors.dim}Welcome! Let's get your AI-powered WordPress toolkit ready.${colors.reset}`);
   log('');
 
-  const totalSteps = 5;
+  const totalSteps = 3;
   
   // ─────────────────────────────────────────────────────────────────────────
   // Step 1: Environment checks
@@ -320,52 +179,24 @@ async function main() {
     process.exit(1);
   }
 
-  // npm
-  const npmVersion = getVersion('npm');
-  if (npmVersion) {
-    success(`npm ${npmVersion}`);
-  } else {
-    error('npm not found');
-    process.exit(1);
-  }
-
-  // WP-CLI (optional but recommended)
-  let wpVersion = null;
-  try {
-    wpVersion = execSync('wp --version --allow-root 2>/dev/null || wp --version 2>/dev/null', { encoding: 'utf8' }).trim().split('\n')[0];
-  } catch (e) {
-    // WP-CLI not installed
-  }
-  if (wpVersion) {
-    success(`WP-CLI ${wpVersion}`);
-  } else {
-    warn('WP-CLI not found (optional, needed for direct plugin management)');
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Step 2: WordPress Studio
-  // ─────────────────────────────────────────────────────────────────────────
-  step(2, totalSteps, 'WordPress Studio...');
-
-  const studioExists = commandExists('studio');
+  // WordPress Studio
+  let studioExists = commandExists('studio');
   
   if (studioExists) {
     const studioVersion = getVersion('studio');
     success(`WordPress Studio installed ${studioVersion ? `(${studioVersion})` : ''}`);
   } else {
-    error('WordPress Studio not found');
+    warn('WordPress Studio not found');
     log('');
-    log('   WordPress Studio is required for local WordPress development.');
+    log('   WordPress Studio is needed to create and manage WordPress sites.');
     log('');
     log('   Install it from: https://developer.wordpress.org/studio/');
     log('');
-    log('   On macOS:');
-    log('     brew install --cask wordpress-studio');
-    log('');
-    log('   Or download from the website and install manually.');
+    log('   macOS:  brew install --cask wordpress-studio');
+    log('   Other:  Download from the website');
     log('');
     
-    const proceed = await confirm('Continue setup anyway? (skills only)', false);
+    const proceed = await confirm('Continue setup anyway?', true);
     if (!proceed) {
       log('\n   Run `skunk setup` again after installing WordPress Studio.');
       rl.close();
@@ -374,110 +205,61 @@ async function main() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Step 3: Install Plugins
+  // Step 2: Install AI Skills
   // ─────────────────────────────────────────────────────────────────────────
-  step(3, totalSteps, 'Plugins...');
+  step(2, totalSteps, 'Installing AI skills...');
   log('');
-  
-  // WooCommerce (optional)
-  log(`   ${colors.bright}WooCommerce${colors.reset}`);
-  const wooChoice = await choice('   Install WooCommerce?', [
-    { label: 'Yes, include WooCommerce', value: 'yes' },
-    { label: 'No, skip WooCommerce', value: 'no' },
-  ]);
-  
-  if (wooChoice === 'yes') {
-    log('   WooCommerce will be installed when you create a site');
-    success('WooCommerce selected');
-  } else {
-    log(`   ${colors.dim}Skipping WooCommerce${colors.reset}`);
-  }
+  log(`   ${colors.dim}Skills teach your AI assistant how to work with WordPress${colors.reset}`);
+  log(`   ${colors.dim}and Skunk products. Installing the essentials...${colors.reset}`);
   log('');
+
+  // Core skills that enable WordPress + Skunk workflow
+  const coreSkills = [
+    { name: 'wordpress-studio', desc: 'WordPress site management' },
+    { name: 'woocommerce', desc: 'WooCommerce store operations' },
+    { name: 'skunkcrm', desc: 'SkunkCRM contact & pipeline management' },
+    { name: 'skunkforms', desc: 'SkunkForms form building' },
+    { name: 'skunkpages', desc: 'SkunkPages landing page optimization' },
+  ];
   
-  const licenses = {};
-  
-  for (const product of PRODUCTS) {
-    log(`   ${colors.bright}${product.name}${colors.reset}`);
-    
-    const licenseChoice = await choice(`   Do you have a ${product.name} Pro license?`, [
-      { label: 'No, install free version', value: 'free' },
-      { label: 'Yes, enter license key', value: 'pro' },
-      { label: 'Skip for now', value: 'skip' },
-    ]);
-
-    if (licenseChoice === 'skip') {
-      warn(`   Skipping ${product.name}`);
-      continue;
-    }
-
-    if (licenseChoice === 'pro') {
-      const key = await ask('   License key: ');
-      if (key) {
-        log('   Validating license...');
-        const result = await validateLicense(key, product.proSlug);
-        
-        if (result.valid) {
-          success(`License valid (${result.activationsLeft} activations remaining)`);
-          licenses[product.slug] = key;
-          // Install both free and pro
-          await installPlugin(product.freeRepo, product.slug);
-          success(`${product.name} (free) ready`);
-          // TODO: Download pro from update server with license
-          success(`${product.name} Pro ready`);
-        } else {
-          warn(`License invalid: ${result.error}`);
-          warn('Installing free version instead');
-          await installPlugin(product.freeRepo, product.slug);
-          success(`${product.name} (free) ready`);
-        }
-      }
-    } else {
-      // Free version
-      await installPlugin(product.freeRepo, product.slug);
-      success(`${product.name} (free) ready`);
-    }
-    
-    log('');
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Step 4: Install Skills
-  // ─────────────────────────────────────────────────────────────────────────
-  step(4, totalSteps, 'AI Skills...');
-
-  const skills = ['wordpress-studio', 'woocommerce-manager', 'skunkcrm', 'skunkforms', 'skunkpages'];
-  
-  for (const skill of skills) {
-    process.stdout.write(`   ${skill} `);
-    const result = await installSkill(skill);
+  for (const skill of coreSkills) {
+    process.stdout.write(`   ${skill.name} `);
+    const result = await installSkill(skill.name);
     if (result.status === 'installed') {
-      log(`${colors.green}✓${colors.reset}`);
+      log(`${colors.green}✓${colors.reset} ${colors.dim}${skill.desc}${colors.reset}`);
     } else if (result.status === 'exists') {
-      log(`${colors.dim}(already installed)${colors.reset}`);
+      log(`${colors.dim}✓ already installed${colors.reset}`);
     } else {
-      log(`${colors.red}✗${colors.reset}`);
+      log(`${colors.yellow}! not available yet${colors.reset}`);
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Step 5: Done!
+  // Step 3: Done!
   // ─────────────────────────────────────────────────────────────────────────
-  step(5, totalSteps, 'Setup complete!');
+  step(3, totalSteps, 'Ready!');
   log('');
-  log(`   ${colors.green}You're all set!${colors.reset}`);
+  log(`   ${colors.green}Your AI assistant now knows WordPress and Skunk!${colors.reset}`);
   log('');
   log('   Next steps:');
   log('');
+  
   if (studioExists) {
     log('   1. Create a WordPress site:');
-    log('      studio create my-site');
+    log(`      ${colors.cyan}studio create my-site${colors.reset}`);
     log('');
-    log('   2. Activate Skunk plugins in WordPress admin');
-    log('');
+    log('   2. Start chatting with your AI:');
+    log(`      ${colors.cyan}"Install WooCommerce"${colors.reset}`);
+    log(`      ${colors.cyan}"Install SkunkCRM"${colors.reset}`);
+    log(`      ${colors.cyan}"Create a contact form"${colors.reset}`);
+  } else {
+    log('   1. Install WordPress Studio');
+    log('   2. Create a site: studio create my-site');
+    log('   3. Chat with your AI to set up plugins');
   }
-  log('   3. Start chatting with your AI assistant');
+  
   log('');
-  log(`   ${colors.dim}Docs: https://skunkglobal.com/guides/openclaw-wordpress${colors.reset}`);
+  log(`   ${colors.dim}Guide: https://skunkglobal.com/guides/openclaw-wordpress${colors.reset}`);
   log('');
 
   rl.close();
