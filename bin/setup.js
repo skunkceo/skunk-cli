@@ -114,19 +114,18 @@ async function choice(question, options) {
 
 async function validateLicense(licenseKey, product) {
   return new Promise((resolve) => {
-    // TODO: Replace with actual license server endpoint
     const postData = JSON.stringify({
-      license_key: licenseKey,
-      product: product,
-      action: 'check',
+      license_key: licenseKey.toUpperCase().trim(),
+      site_url: 'cli-setup', // Validation only, not activation
     });
 
     const options = {
       hostname: 'skunkglobal.com',
       port: 443,
-      path: '/wp-json/lmfwc/v2/licenses/validate/' + encodeURIComponent(licenseKey),
-      method: 'GET',
+      path: '/api/license/validate',
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'User-Agent': 'skunk-cli',
       },
     };
@@ -137,11 +136,11 @@ async function validateLicense(licenseKey, product) {
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
-          // Check if license is valid and has activations left
-          if (json.success && json.data) {
+          if (json.success && json.data && json.data.valid) {
             resolve({
               valid: true,
-              activationsLeft: json.data.timesActivatedMax - json.data.timesActivated,
+              activationsLeft: json.data.max_sites ? json.data.max_sites - (json.data.active_sites || 0) : 'unlimited',
+              productsCovered: json.data.products_covered || [product],
             });
           } else {
             resolve({ valid: false, error: json.message || 'Invalid license' });
@@ -156,6 +155,7 @@ async function validateLicense(licenseKey, product) {
       resolve({ valid: false, error: 'Could not connect to license server' });
     });
 
+    req.write(postData);
     req.end();
   });
 }
@@ -188,15 +188,56 @@ const PRODUCTS = [
   },
 ];
 
-async function installPlugin(repo, pluginSlug) {
+async function installPlugin(repo, pluginSlug, wpPath = null) {
   const url = `https://github.com/${repo}/releases/latest/download/${pluginSlug}.zip`;
+  
+  // If WP path provided and wp-cli available, install directly
+  if (wpPath && commandExists('wp')) {
+    try {
+      log(`   Installing ${pluginSlug} to WordPress...`);
+      execSync(`wp plugin install "${url}" --path="${wpPath}"`, { stdio: 'pipe' });
+      return { status: 'installed', location: 'wordpress' };
+    } catch (e) {
+      // Fall through to cache
+    }
+  }
+  
+  // Otherwise, cache in ~/.skunk/plugins/ for later
+  const cacheDir = path.join(process.env.HOME, '.skunk', 'plugins');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  
+  const zipPath = path.join(cacheDir, `${pluginSlug}.zip`);
+  
   log(`   Downloading ${pluginSlug}...`);
   
-  // For now, just log what we would do
-  // In production: download zip, extract to ~/.skunk/plugins/ or similar
-  // Or if WP path provided, install directly via wp plugin install
-  
-  return true;
+  return new Promise((resolve) => {
+    const file = fs.createWriteStream(zipPath);
+    
+    https.get(url, { headers: { 'User-Agent': 'skunk-cli' } }, (res) => {
+      // Handle GitHub redirect
+      if (res.statusCode === 302 || res.statusCode === 301) {
+        https.get(res.headers.location, { headers: { 'User-Agent': 'skunk-cli' } }, (res2) => {
+          res2.pipe(file);
+          file.on('finish', () => {
+            file.close();
+            resolve({ status: 'cached', location: zipPath });
+          });
+        }).on('error', () => resolve({ status: 'failed' }));
+        return;
+      }
+      
+      if (res.statusCode !== 200) {
+        resolve({ status: 'failed', error: `HTTP ${res.statusCode}` });
+        return;
+      }
+      
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        resolve({ status: 'cached', location: zipPath });
+      });
+    }).on('error', () => resolve({ status: 'failed' }));
+  });
 }
 
 async function installSkill(skillName) {
