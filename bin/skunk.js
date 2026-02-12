@@ -14,6 +14,7 @@ const commands = {
   list: listSkills,
   available: listAvailable,
   remove: removeSkill,
+  setup: runSetup,
   help: showHelp,
 };
 
@@ -28,11 +29,17 @@ if (commands[command]) {
   showHelp();
 }
 
+function runSetup() {
+  const setupPath = path.join(__dirname, 'setup.js');
+  require(setupPath);
+}
+
 function showHelp() {
   console.log(`
-🦨 Skunk CLI - Install skills for OpenClaw
+🦨 Skunk CLI - Skunk Global Suite for OpenClaw
 
 Usage:
+  skunk setup              Interactive setup wizard (start here!)
   skunk install <skill>    Install a skill
   skunk remove <skill>     Remove an installed skill
   skunk list               List installed skills
@@ -40,11 +47,11 @@ Usage:
   skunk help               Show this help
 
 Examples:
-  skunk install wordpress-studio
-  skunk install seo-analyzer
-  skunk list
+  skunk setup                    # Full suite setup wizard
+  skunk install wordpress-studio # Install individual skill
+  skunk list                     # See what's installed
 
-Skills: https://github.com/skunkceo/openclaw-skills
+Docs: https://skunkglobal.com/guides/openclaw-wordpress
 `);
 }
 
