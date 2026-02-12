@@ -376,7 +376,22 @@ async function main() {
   // ─────────────────────────────────────────────────────────────────────────
   // Step 3: Install Plugins
   // ─────────────────────────────────────────────────────────────────────────
-  step(3, totalSteps, 'Skunk Plugins...');
+  step(3, totalSteps, 'Plugins...');
+  log('');
+  
+  // WooCommerce (optional)
+  log(`   ${colors.bright}WooCommerce${colors.reset}`);
+  const wooChoice = await choice('   Install WooCommerce?', [
+    { label: 'Yes, include WooCommerce', value: 'yes' },
+    { label: 'No, skip WooCommerce', value: 'no' },
+  ]);
+  
+  if (wooChoice === 'yes') {
+    log('   WooCommerce will be installed when you create a site');
+    success('WooCommerce selected');
+  } else {
+    log(`   ${colors.dim}Skipping WooCommerce${colors.reset}`);
+  }
   log('');
   
   const licenses = {};
@@ -430,7 +445,7 @@ async function main() {
   // ─────────────────────────────────────────────────────────────────────────
   step(4, totalSteps, 'AI Skills...');
 
-  const skills = ['wordpress-studio', 'skunkcrm', 'skunkforms', 'skunkpages'];
+  const skills = ['wordpress-studio', 'woocommerce-manager', 'skunkcrm', 'skunkforms', 'skunkpages'];
   
   for (const skill of skills) {
     process.stdout.write(`   ${skill} `);
