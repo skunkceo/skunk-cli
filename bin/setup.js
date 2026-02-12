@@ -179,6 +179,29 @@ async function main() {
     process.exit(1);
   }
 
+  // OpenClaw
+  let openclawExists = commandExists('openclaw');
+  
+  if (openclawExists) {
+    const openclawVersion = getVersion('openclaw');
+    success(`OpenClaw installed ${openclawVersion ? `(${openclawVersion})` : ''}`);
+  } else {
+    error('OpenClaw not found');
+    log('');
+    log('   OpenClaw is your AI assistant that uses these skills.');
+    log('');
+    log('   Follow the setup guide:');
+    log(`   ${colors.cyan}https://skunkglobal.com/guides/openclaw-wordpress${colors.reset}`);
+    log('');
+    
+    const proceed = await confirm('Continue installing skills anyway?', true);
+    if (!proceed) {
+      log('\n   Run `skunk setup` again after installing OpenClaw.');
+      rl.close();
+      process.exit(0);
+    }
+  }
+
   // WordPress Studio
   let studioExists = commandExists('studio');
   
@@ -186,22 +209,7 @@ async function main() {
     const studioVersion = getVersion('studio');
     success(`WordPress Studio installed ${studioVersion ? `(${studioVersion})` : ''}`);
   } else {
-    warn('WordPress Studio not found');
-    log('');
-    log('   WordPress Studio is needed to create and manage WordPress sites.');
-    log('');
-    log('   Install it from: https://developer.wordpress.org/studio/');
-    log('');
-    log('   macOS:  brew install --cask wordpress-studio');
-    log('   Other:  Download from the website');
-    log('');
-    
-    const proceed = await confirm('Continue setup anyway?', true);
-    if (!proceed) {
-      log('\n   Run `skunk setup` again after installing WordPress Studio.');
-      rl.close();
-      process.exit(0);
-    }
+    warn('WordPress Studio not found (optional, for local WordPress dev)');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -239,21 +247,25 @@ async function main() {
   // ─────────────────────────────────────────────────────────────────────────
   step(3, totalSteps, 'Ready!');
   log('');
-  log(`   ${colors.green}Your AI assistant now knows WordPress and Skunk!${colors.reset}`);
-  log('');
-  log('   Start chatting with your AI:');
-  log('');
-  log(`      ${colors.cyan}"Create a new WordPress site called my-store"${colors.reset}`);
-  log(`      ${colors.cyan}"Install WooCommerce and set up a UK store"${colors.reset}`);
-  log(`      ${colors.cyan}"Install SkunkCRM"${colors.reset}`);
-  log(`      ${colors.cyan}"Create a contact form"${colors.reset}`);
+  log(`   ${colors.green}Skills installed!${colors.reset}`);
   log('');
   
-  if (!studioExists) {
-    log(`   ${colors.yellow}Note: Install WordPress Studio first for local development${colors.reset}`);
+  if (openclawExists) {
+    log(`   ${colors.yellow}Restart OpenClaw to load the new skills:${colors.reset}`);
+    log(`      ${colors.cyan}openclaw gateway restart${colors.reset}`);
     log('');
+    log('   Then start chatting:');
+    log('');
+    log(`      ${colors.cyan}"Create a new WordPress site called my-store"${colors.reset}`);
+    log(`      ${colors.cyan}"Install WooCommerce and set up a UK store"${colors.reset}`);
+    log(`      ${colors.cyan}"Install SkunkCRM"${colors.reset}`);
+    log(`      ${colors.cyan}"Create a contact form"${colors.reset}`);
+  } else {
+    log('   After installing OpenClaw, run `skunk setup` again');
+    log('   to verify everything is ready.');
   }
   
+  log('');
   log(`   ${colors.dim}Guide: https://skunkglobal.com/guides/openclaw-wordpress${colors.reset}`);
   log('');
 
