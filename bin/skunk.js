@@ -9,30 +9,27 @@ const SKILLS_REPO = 'skunkceo/openclaw-skills';
 const SKILLS_BRANCH = 'main';
 const OPENCLAW_DIR = path.join(process.env.HOME, '.openclaw', 'skills');
 
-// Plugin registry - maps plugin names to download URLs
+// Plugin registry - maps plugin names to slugs
+// All downloads go through skunkglobal.com/api/plugin-updates/download
 const PLUGIN_REGISTRY = {
   'skunkcrm': {
-    free: 'https://skunkcrm.com/api/download/free',
-    pro: 'https://skunkcrm.com/api/download/pro',
+    slug: 'skunkcrm',
+    proSlug: 'skunkcrm-pro',
     name: 'SkunkCRM',
-    slug: 'skunk-crm',
-    requiresLicense: false, // Pro requires license
   },
   'skunkforms': {
-    free: 'https://skunkforms.com/api/download/free',
-    pro: 'https://skunkforms.com/api/download/pro',
+    slug: 'skunkforms',
+    proSlug: 'skunkforms-pro',
     name: 'SkunkForms',
-    slug: 'skunk-forms',
-    requiresLicense: false,
   },
   'skunkpages': {
-    free: 'https://skunkpages.com/api/download/free',
-    pro: 'https://skunkpages.com/api/download/pro',
+    slug: 'skunkpages',
+    proSlug: 'skunkpages-pro',
     name: 'SkunkPages',
-    slug: 'skunk-pages',
-    requiresLicense: false,
   },
 };
+
+const DOWNLOAD_BASE = 'https://skunkglobal.com/api/plugin-updates/download';
 
 const colors = {
   reset: '\x1b[0m',
@@ -303,10 +300,26 @@ To install WordPress plugins, you need either:
     return;
   }
   
-  const downloadUrl = isPro ? plugin.pro : plugin.free;
+  // Build download URL
+  const slug = isPro ? plugin.proSlug : plugin.slug;
+  let downloadUrl = `${DOWNLOAD_BASE}?slug=${slug}`;
+  
+  // Add license key for Pro versions
+  if (isPro && license) {
+    downloadUrl += `&license_key=${license}`;
+  }
+  
   const displayName = isPro ? `${plugin.name} Pro` : plugin.name;
   
   console.log(`Installing ${displayName}...`);
+  
+  // Pro requires license
+  if (isPro && !license) {
+    warn('Pro version requires a license key.');
+    console.log(`  skunk install plugin ${name} --license=YOUR_LICENSE_KEY\n`);
+    console.log(`${colors.dim}Get a license at: https://skunkglobal.com/pricing${colors.reset}`);
+    return;
+  }
   
   // Build the command
   let cmd;
@@ -316,21 +329,11 @@ To install WordPress plugins, you need either:
     cmd = `wp plugin install "${downloadUrl}" --activate`;
   }
   
-  // Add license if Pro and license provided
-  if (isPro && license) {
-    console.log(`${colors.dim}License key provided${colors.reset}`);
-  }
-  
   console.log(`${colors.dim}Running: ${cmd}${colors.reset}\n`);
   
   try {
     execSync(cmd, { stdio: 'inherit' });
     success(`Installed ${displayName}`);
-    
-    // If Pro and license provided, try to activate
-    if (isPro && license) {
-      console.log(`\n${colors.yellow}!${colors.reset} License activation may require manual setup in WordPress admin.`);
-    }
     
     // Suggest installing the skill too
     console.log(`\n${colors.dim}Tip: Install the AI skill to let your assistant manage ${plugin.name}:${colors.reset}`);
