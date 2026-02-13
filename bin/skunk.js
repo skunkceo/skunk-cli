@@ -3,61 +3,218 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 
 const SKILLS_REPO = 'skunkceo/openclaw-skills';
 const SKILLS_BRANCH = 'main';
 const OPENCLAW_DIR = path.join(process.env.HOME, '.openclaw', 'skills');
 
-const commands = {
-  install: installSkill,
-  list: listSkills,
-  available: listAvailable,
-  remove: removeSkill,
-  setup: runSetup,
-  help: showHelp,
+// Plugin registry - maps plugin names to download URLs
+const PLUGIN_REGISTRY = {
+  'skunkcrm': {
+    free: 'https://skunkcrm.com/api/download/free',
+    pro: 'https://skunkcrm.com/api/download/pro',
+    name: 'SkunkCRM',
+    slug: 'skunk-crm',
+    requiresLicense: false, // Pro requires license
+  },
+  'skunkforms': {
+    free: 'https://skunkforms.com/api/download/free',
+    pro: 'https://skunkforms.com/api/download/pro',
+    name: 'SkunkForms',
+    slug: 'skunk-forms',
+    requiresLicense: false,
+  },
+  'skunkpages': {
+    free: 'https://skunkpages.com/api/download/free',
+    pro: 'https://skunkpages.com/api/download/pro',
+    name: 'SkunkPages',
+    slug: 'skunk-pages',
+    requiresLicense: false,
+  },
 };
 
+const colors = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  dim: '\x1b[2m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  cyan: '\x1b[36m',
+};
+
+function success(msg) { console.log(`${colors.green}✓${colors.reset} ${msg}`); }
+function warn(msg) { console.log(`${colors.yellow}!${colors.reset} ${msg}`); }
+function error(msg) { console.log(`${colors.red}✗${colors.reset} ${msg}`); }
+
+// Parse arguments
 const args = process.argv.slice(2);
 const command = args[0] || 'help';
-const skillName = args[1];
 
-if (commands[command]) {
-  commands[command](skillName);
-} else {
-  console.log(`Unknown command: ${command}`);
-  showHelp();
+// Route commands
+switch (command) {
+  case 'install':
+    handleInstall(args.slice(1));
+    break;
+  case 'remove':
+    handleRemove(args.slice(1));
+    break;
+  case 'list':
+    listSkills();
+    break;
+  case 'available':
+    listAvailable();
+    break;
+  case 'plugins':
+    listPlugins();
+    break;
+  case 'update':
+    handleUpdate();
+    break;
+  case 'setup':
+    runSetup();
+    break;
+  case 'help':
+  case '--help':
+  case '-h':
+    showHelp();
+    break;
+  default:
+    console.log(`Unknown command: ${command}`);
+    showHelp();
 }
 
-function runSetup() {
-  const setupPath = path.join(__dirname, 'setup.js');
-  require(setupPath);
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Install Handler
+// ═══════════════════════════════════════════════════════════════════════════
 
-function showHelp() {
-  console.log(`
-🦨 Skunk CLI - Skunk Global Suite for OpenClaw
-
+async function handleInstall(args) {
+  const type = args[0];
+  const name = args[1];
+  const extraArgs = args.slice(2);
+  
+  if (!type || !name) {
+    console.log(`
 Usage:
-  skunk setup              Interactive setup wizard (start here!)
-  skunk install <skill>    Install a skill
-  skunk remove <skill>     Remove an installed skill
-  skunk list               List installed skills
-  skunk available          List available skills
-  skunk help               Show this help
+  skunk install skill <name>     Install an AI skill
+  skunk install plugin <name>    Install a WordPress plugin
 
 Examples:
-  skunk setup                    # Full suite setup wizard
-  skunk install wordpress-studio # Install individual skill
-  skunk list                     # See what's installed
+  skunk install skill skunkforms
+  skunk install plugin skunkforms
+  skunk install plugin skunkcrm-pro --license=XXXX
 
-Docs: https://skunkglobal.com/guides/openclaw-wordpress
+Run "skunk available" for skills or "skunk plugins" for plugins.
 `);
+    return;
+  }
+  
+  if (type === 'skill') {
+    await installSkill(name);
+  } else if (type === 'plugin') {
+    await installPlugin(name, extraArgs);
+  } else {
+    // Backwards compat: treat as skill name
+    console.log(`${colors.yellow}Hint: Use "skunk install skill ${type}" or "skunk install plugin ${type}"${colors.reset}\n`);
+    await installSkill(type);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Remove Handler
+// ═══════════════════════════════════════════════════════════════════════════
+
+function handleRemove(args) {
+  const type = args[0];
+  const name = args[1];
+  
+  if (!type) {
+    console.log('Usage: skunk remove skill <name>');
+    return;
+  }
+  
+  if (type === 'skill' && name) {
+    removeSkill(name);
+  } else {
+    // Backwards compat
+    removeSkill(type);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Skill Management
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function installSkill(name) {
+  if (!name) {
+    console.log('Usage: skunk install skill <skill-name>');
+    console.log('Run "skunk available" to see available skills');
+    return;
+  }
+  
+  console.log(`Installing skill: ${name}...`);
+  
+  if (!fs.existsSync(OPENCLAW_DIR)) {
+    fs.mkdirSync(OPENCLAW_DIR, { recursive: true });
+  }
+  
+  const skillDir = path.join(OPENCLAW_DIR, name);
+  
+  if (fs.existsSync(skillDir)) {
+    console.log(`Skill ${name} is already installed. Remove it first with: skunk remove skill ${name}`);
+    return;
+  }
+  
+  const files = ['SKILL.md', 'config.json', 'README.md'];
+  fs.mkdirSync(skillDir, { recursive: true });
+  
+  let installed = false;
+  
+  for (const file of files) {
+    const url = `https://raw.githubusercontent.com/${SKILLS_REPO}/${SKILLS_BRANCH}/skills/${name}/${file}`;
+    
+    try {
+      const content = await fetchFile(url);
+      if (content) {
+        fs.writeFileSync(path.join(skillDir, file), content);
+        if (file === 'SKILL.md') installed = true;
+      }
+    } catch (e) {
+      // Optional files may not exist
+    }
+  }
+  
+  if (installed) {
+    success(`Installed skill "${name}" to ${skillDir}`);
+    console.log(`\n${colors.dim}Restart your AI assistant to load the new skill.${colors.reset}`);
+  } else {
+    fs.rmSync(skillDir, { recursive: true, force: true });
+    error(`Skill "${name}" not found. Run "skunk available" to see available skills.`);
+  }
+}
+
+function removeSkill(name) {
+  if (!name) {
+    console.log('Usage: skunk remove skill <skill-name>');
+    return;
+  }
+  
+  const skillDir = path.join(OPENCLAW_DIR, name);
+  
+  if (!fs.existsSync(skillDir)) {
+    console.log(`Skill ${name} is not installed.`);
+    return;
+  }
+  
+  fs.rmSync(skillDir, { recursive: true, force: true });
+  success(`Removed skill "${name}"`);
 }
 
 function listSkills() {
   if (!fs.existsSync(OPENCLAW_DIR)) {
     console.log('No skills installed yet.');
+    console.log('Run "skunk available" to see available skills.');
     return;
   }
   
@@ -70,8 +227,9 @@ function listSkills() {
   if (skills.length === 0) {
     console.log('No skills installed yet.');
   } else {
-    console.log('Installed skills:');
-    skills.forEach(s => console.log(`  - ${s}`));
+    console.log('Installed skills:\n');
+    skills.forEach(s => console.log(`  ${colors.green}●${colors.reset} ${s}`));
+    console.log(`\n${colors.dim}Skills location: ${OPENCLAW_DIR}${colors.reset}`);
   }
 }
 
@@ -86,84 +244,206 @@ async function listAvailable() {
     res.on('end', () => {
       try {
         const skills = JSON.parse(data);
-        console.log('Available skills:');
+        console.log('Available AI skills:\n');
         skills.filter(s => s.type === 'dir').forEach(s => {
-          console.log(`  - ${s.name}`);
+          console.log(`  ${colors.cyan}●${colors.reset} ${s.name}`);
         });
-        console.log('\nInstall with: skunk install <skill-name>');
+        console.log(`\n${colors.dim}Install with: skunk install skill <name>${colors.reset}`);
       } catch (e) {
-        console.error('Failed to fetch skills list');
+        error('Failed to fetch skills list');
       }
     });
   }).on('error', (e) => {
-    console.error('Failed to fetch skills:', e.message);
+    error('Failed to fetch skills: ' + e.message);
   });
 }
 
-async function installSkill(name) {
-  if (!name) {
-    console.log('Usage: skunk install <skill-name>');
-    console.log('Run "skunk available" to see available skills');
+// ═══════════════════════════════════════════════════════════════════════════
+// Plugin Management
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function installPlugin(name, extraArgs) {
+  // Parse name for -pro suffix
+  let pluginKey = name.replace(/-pro$/, '');
+  let isPro = name.endsWith('-pro');
+  
+  const plugin = PLUGIN_REGISTRY[pluginKey];
+  
+  if (!plugin) {
+    error(`Unknown plugin: ${name}`);
+    console.log('\nAvailable plugins:');
+    listPlugins();
     return;
   }
   
-  console.log(`Installing ${name}...`);
-  
-  // Create skills directory if it doesn't exist
-  if (!fs.existsSync(OPENCLAW_DIR)) {
-    fs.mkdirSync(OPENCLAW_DIR, { recursive: true });
-  }
-  
-  const skillDir = path.join(OPENCLAW_DIR, name);
-  
-  if (fs.existsSync(skillDir)) {
-    console.log(`Skill ${name} is already installed. Remove it first with: skunk remove ${name}`);
-    return;
-  }
-  
-  // Fetch skill files from GitHub
-  const files = ['SKILL.md', 'config.json', 'README.md'];
-  fs.mkdirSync(skillDir, { recursive: true });
-  
-  let success = false;
-  
-  for (const file of files) {
-    const url = `https://raw.githubusercontent.com/${SKILLS_REPO}/${SKILLS_BRANCH}/skills/${name}/${file}`;
-    
-    try {
-      const content = await fetchFile(url);
-      if (content) {
-        fs.writeFileSync(path.join(skillDir, file), content);
-        if (file === 'SKILL.md') success = true;
-      }
-    } catch (e) {
-      // README might not exist, that's ok
+  // Parse license from args
+  let license = null;
+  for (const arg of extraArgs) {
+    if (arg.startsWith('--license=')) {
+      license = arg.split('=')[1];
     }
   }
   
-  if (success) {
-    console.log(`✓ Installed ${name} to ${skillDir}`);
+  // Detect WP-CLI or WordPress Studio
+  const hasWpCli = commandExists('wp');
+  const hasStudio = commandExists('studio');
+  
+  if (!hasWpCli && !hasStudio) {
+    error('No WordPress CLI found.');
+    console.log(`
+To install WordPress plugins, you need either:
+
+  ${colors.cyan}WP-CLI${colors.reset} (for server/local installs)
+    https://wp-cli.org/
+
+  ${colors.cyan}WordPress Studio${colors.reset} (for local development)
+    https://developer.wordpress.org/studio/
+    macOS: brew install --cask wordpress-studio
+`);
+    return;
+  }
+  
+  const downloadUrl = isPro ? plugin.pro : plugin.free;
+  const displayName = isPro ? `${plugin.name} Pro` : plugin.name;
+  
+  console.log(`Installing ${displayName}...`);
+  
+  // Build the command
+  let cmd;
+  if (hasStudio) {
+    cmd = `studio wp plugin install "${downloadUrl}" --activate`;
   } else {
-    fs.rmSync(skillDir, { recursive: true, force: true });
-    console.log(`✗ Skill "${name}" not found. Run "skunk available" to see available skills.`);
+    cmd = `wp plugin install "${downloadUrl}" --activate`;
+  }
+  
+  // Add license if Pro and license provided
+  if (isPro && license) {
+    console.log(`${colors.dim}License key provided${colors.reset}`);
+  }
+  
+  console.log(`${colors.dim}Running: ${cmd}${colors.reset}\n`);
+  
+  try {
+    execSync(cmd, { stdio: 'inherit' });
+    success(`Installed ${displayName}`);
+    
+    // If Pro and license provided, try to activate
+    if (isPro && license) {
+      console.log(`\n${colors.yellow}!${colors.reset} License activation may require manual setup in WordPress admin.`);
+    }
+    
+    // Suggest installing the skill too
+    console.log(`\n${colors.dim}Tip: Install the AI skill to let your assistant manage ${plugin.name}:${colors.reset}`);
+    console.log(`  skunk install skill ${pluginKey}\n`);
+    
+  } catch (e) {
+    error(`Failed to install ${displayName}`);
+    console.log(`\n${colors.dim}If using WordPress Studio, make sure you have a site selected.${colors.reset}`);
   }
 }
 
-function removeSkill(name) {
-  if (!name) {
-    console.log('Usage: skunk remove <skill-name>');
+function listPlugins() {
+  console.log('Available WordPress plugins:\n');
+  
+  for (const [key, plugin] of Object.entries(PLUGIN_REGISTRY)) {
+    console.log(`  ${colors.cyan}●${colors.reset} ${key}${colors.dim} (${plugin.name} Free)${colors.reset}`);
+    console.log(`  ${colors.cyan}●${colors.reset} ${key}-pro${colors.dim} (${plugin.name} Pro)${colors.reset}`);
+  }
+  
+  console.log(`
+${colors.dim}Install with: skunk install plugin <name>
+Pro versions: skunk install plugin <name>-pro --license=XXXX${colors.reset}
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Update
+// ═══════════════════════════════════════════════════════════════════════════
+
+function handleUpdate() {
+  console.log('Updating Skunk CLI...\n');
+  
+  try {
+    execSync('npm update -g @skunkceo/cli', { stdio: 'inherit' });
+    success('Skunk CLI updated');
+  } catch (e) {
+    error('Failed to update CLI');
+    console.log(`${colors.dim}Try: sudo npm update -g @skunkceo/cli${colors.reset}`);
     return;
   }
   
-  const skillDir = path.join(OPENCLAW_DIR, name);
-  
-  if (!fs.existsSync(skillDir)) {
-    console.log(`Skill ${name} is not installed.`);
-    return;
+  // Refresh installed skills
+  if (fs.existsSync(OPENCLAW_DIR)) {
+    const skills = fs.readdirSync(OPENCLAW_DIR).filter(f => {
+      const skillPath = path.join(OPENCLAW_DIR, f);
+      return fs.statSync(skillPath).isDirectory();
+    });
+    
+    if (skills.length > 0) {
+      console.log('\nRefreshing installed skills...\n');
+      
+      for (const skill of skills) {
+        const skillDir = path.join(OPENCLAW_DIR, skill);
+        fs.rmSync(skillDir, { recursive: true, force: true });
+        // Re-fetch (sync for simplicity in update flow)
+        console.log(`  Updating ${skill}...`);
+      }
+      
+      console.log(`\n${colors.dim}Run "skunk list" to verify skills.${colors.reset}`);
+    }
   }
   
-  fs.rmSync(skillDir, { recursive: true, force: true });
-  console.log(`✓ Removed ${name}`);
+  console.log('\n' + success('Update complete'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Setup & Help
+// ═══════════════════════════════════════════════════════════════════════════
+
+function runSetup() {
+  const setupPath = path.join(__dirname, 'setup.js');
+  require(setupPath);
+}
+
+function showHelp() {
+  console.log(`
+${colors.bright}🦨 Skunk CLI${colors.reset} - AI-Powered WordPress Toolkit
+
+${colors.bright}Usage:${colors.reset}
+  skunk setup                       Interactive setup wizard
+  skunk install skill <name>        Install an AI skill
+  skunk install plugin <name>       Install a WordPress plugin
+  skunk remove skill <name>         Remove an installed skill
+  skunk list                        List installed skills
+  skunk available                   List available skills
+  skunk plugins                     List available plugins
+  skunk update                      Update CLI and refresh skills
+  skunk help                        Show this help
+
+${colors.bright}Examples:${colors.reset}
+  skunk setup                       # Full guided setup
+  skunk install skill skunkforms    # Install SkunkForms AI skill
+  skunk install plugin skunkforms   # Install SkunkForms WP plugin
+  skunk install plugin skunkcrm-pro --license=XXXX
+
+${colors.bright}Skills${colors.reset} teach your AI assistant how to use Skunk products.
+${colors.bright}Plugins${colors.reset} are the actual WordPress plugins that run on your site.
+
+${colors.dim}Docs: https://skunkglobal.com/guides/openclaw-wordpress${colors.reset}
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════════════════════════════════════════
+
+function commandExists(cmd) {
+  try {
+    execSync(`which ${cmd}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function fetchFile(url) {

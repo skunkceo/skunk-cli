@@ -1,6 +1,6 @@
 # Skunk CLI
 
-Install and manage [Skunk Global](https://skunkglobal.com) skills for [OpenClaw](https://openclaw.ai).
+Install and manage Skunk Global AI skills and WordPress plugins.
 
 ## Installation
 
@@ -11,49 +11,60 @@ npm install -g @skunkceo/cli
 ## Quick Start
 
 ```bash
+# Interactive setup wizard
 skunk setup
-```
 
-This interactive wizard will:
-1. Check your environment (Node.js, OpenClaw, WordPress Studio)
-2. Install essential skills (WordPress, WooCommerce, SkunkCRM, SkunkForms, SkunkPages)
-3. Guide you through next steps
+# Install an AI skill (teaches your AI assistant)
+skunk install skill skunkforms
+
+# Install a WordPress plugin
+skunk install plugin skunkforms
+
+# Install Pro version with license
+skunk install plugin skunkcrm-pro --license=YOUR_LICENSE_KEY
+```
 
 ## Commands
 
+| Command | Description |
+|---------|-------------|
+| `skunk setup` | Interactive setup wizard |
+| `skunk install skill <name>` | Install an AI skill |
+| `skunk install plugin <name>` | Install a WordPress plugin |
+| `skunk remove skill <name>` | Remove an installed skill |
+| `skunk list` | List installed skills |
+| `skunk available` | List available skills |
+| `skunk plugins` | List available plugins |
+| `skunk update` | Update CLI and refresh skills |
+| `skunk help` | Show help |
+
+## Skills vs Plugins
+
+**Skills** teach your AI assistant (OpenClaw, Claude, etc.) how to work with Skunk products. They're installed to `~/.openclaw/skills/`.
+
+**Plugins** are the actual WordPress plugins that run on your site. They're installed via WP-CLI or WordPress Studio.
+
+For the best experience, install both:
 ```bash
-skunk setup              # Interactive setup wizard (start here!)
-skunk install <skill>    # Install a specific skill
-skunk remove <skill>     # Remove an installed skill
-skunk list               # List installed skills
-skunk available          # See all available skills
-skunk help               # Show help
+# Install the skill so your AI knows how to use it
+skunk install skill skunkforms
+
+# Install the plugin on your WordPress site
+skunk install plugin skunkforms
 ```
 
-## What are Skills?
+## Available Products
 
-Skills teach OpenClaw how to use specific tools and services. Each skill contains instructions that help your AI assistant understand:
+- **skunkcrm** / **skunkcrm-pro** - CRM & contact management
+- **skunkforms** / **skunkforms-pro** - Form builder
+- **skunkpages** / **skunkpages-pro** - Landing page builder
 
-- What commands to run
-- How to interpret results
-- Best practices for the tool
+## Requirements
 
-After installing skills, restart OpenClaw to load them:
-
-```bash
-openclaw gateway restart
-```
-
-## Available Skills
-
-Browse all skills at: https://github.com/skunkceo/openclaw-skills
-
-## Guide
-
-Full guide: https://skunkglobal.com/guides/openclaw-wordpress
+- Node.js 18+
+- For plugin installation: WP-CLI or WordPress Studio
 
 ## Links
 
+- [OpenClaw WordPress Guide](https://skunkglobal.com/guides/openclaw-wordpress)
 - [Skunk Global](https://skunkglobal.com)
-- [Skills Repository](https://github.com/skunkceo/openclaw-skills)
-- [OpenClaw](https://openclaw.ai)
