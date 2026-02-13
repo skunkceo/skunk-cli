@@ -66,6 +66,9 @@ switch (command) {
   case 'plugins':
     listPlugins();
     break;
+  case 'status':
+    checkStatus();
+    break;
   case 'update':
     handleUpdate();
     break;
@@ -360,6 +363,110 @@ Pro versions: skunk install plugin <name>-pro --license=XXXX${colors.reset}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Status - Check plugin versions
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function checkStatus() {
+  console.log('Checking plugin versions...\n');
+  
+  // Fetch latest versions from API
+  const versionsUrl = 'https://skunkglobal.com/api/plugins/versions';
+  
+  try {
+    const latestVersions = await new Promise((resolve, reject) => {
+      https.get(versionsUrl, { headers: { 'User-Agent': 'skunk-cli' } }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch (e) {
+            reject(new Error('Invalid response'));
+          }
+        });
+      }).on('error', reject);
+    });
+    
+    if (!latestVersions.plugins) {
+      error('Failed to fetch version info');
+      return;
+    }
+    
+    // Check if we're in a WordPress context (wp or studio available)
+    const hasWpCli = commandExists('wp');
+    const hasStudio = commandExists('studio');
+    const inWordPress = hasWpCli || hasStudio;
+    
+    // Get installed versions if in WordPress context
+    let installedVersions = {};
+    if (inWordPress) {
+      try {
+        const cmd = hasStudio ? 'studio wp plugin list --format=json' : 'wp plugin list --format=json';
+        const output = execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+        const plugins = JSON.parse(output);
+        
+        for (const p of plugins) {
+          // Map WP plugin slugs to our slugs
+          if (p.name === 'skunk-crm' || p.name === 'skunkcrm') {
+            installedVersions['skunkcrm'] = p.version;
+          } else if (p.name === 'skunk-forms' || p.name === 'skunkforms') {
+            installedVersions['skunkforms'] = p.version;
+          } else if (p.name === 'skunk-pages' || p.name === 'skunkpages') {
+            installedVersions['skunkpages'] = p.version;
+          }
+        }
+      } catch (e) {
+        // Couldn't get installed versions, that's ok
+      }
+    }
+    
+    console.log(`${colors.bright}Plugin${colors.reset}            ${colors.bright}Latest${colors.reset}      ${inWordPress ? `${colors.bright}Installed${colors.reset}` : ''}`);
+    console.log('─'.repeat(inWordPress ? 50 : 30));
+    
+    // Show free plugins
+    for (const [slug, info] of Object.entries(latestVersions.plugins)) {
+      if (info.type === 'free') {
+        const installed = installedVersions[slug];
+        const latestV = info.version;
+        
+        let status = '';
+        if (installed) {
+          if (installed === latestV) {
+            status = `${colors.green}${installed}${colors.reset} ✓`;
+          } else {
+            status = `${colors.yellow}${installed}${colors.reset} → ${latestV}`;
+          }
+        } else if (inWordPress) {
+          status = `${colors.dim}not installed${colors.reset}`;
+        }
+        
+        const padding = ' '.repeat(Math.max(0, 16 - slug.length));
+        const vPadding = ' '.repeat(Math.max(0, 10 - latestV.length));
+        console.log(`${slug}${padding}${latestV}${vPadding}${status}`);
+      }
+    }
+    
+    console.log('');
+    
+    // Show if updates available
+    const hasUpdates = Object.entries(installedVersions).some(([slug, v]) => {
+      const latest = latestVersions.plugins[slug];
+      return latest && latest.version !== v;
+    });
+    
+    if (hasUpdates) {
+      console.log(`${colors.yellow}Updates available!${colors.reset} Run:`);
+      console.log(`  skunk install plugin <name>\n`);
+    } else if (Object.keys(installedVersions).length > 0) {
+      console.log(`${colors.green}All plugins up to date!${colors.reset}\n`);
+    }
+    
+  } catch (e) {
+    error('Failed to check versions: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Update
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -420,6 +527,7 @@ ${colors.bright}Usage:${colors.reset}
   skunk list                        List installed skills
   skunk available                   List available skills
   skunk plugins                     List available plugins
+  skunk status                      Check plugin versions (+ compare if in WP site)
   skunk update                      Update CLI and refresh skills
   skunk help                        Show this help
 
