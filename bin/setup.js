@@ -232,6 +232,7 @@ async function main() {
 
   // Core skills that enable WordPress + Skunk workflow
   const coreSkills = [
+    { name: 'skunk-cli', desc: 'Skunk CLI for installing plugins & skills' },
     { name: 'wordpress-studio', desc: 'WordPress site management' },
     { name: 'woocommerce', desc: 'WooCommerce store operations' },
     { name: 'skunkcrm', desc: 'SkunkCRM contact & pipeline management' },
