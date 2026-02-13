@@ -559,11 +559,43 @@ function handleUpdate() {
       for (const skill of skills) {
         const skillDir = path.join(OPENCLAW_DIR, skill);
         fs.rmSync(skillDir, { recursive: true, force: true });
-        // Re-fetch (sync for simplicity in update flow)
-        console.log(`  Updating ${skill}...`);
+        
+        // Re-install the skill
+        process.stdout.write(`  ${skill}... `);
+        try {
+          // Fetch skill files from GitHub
+          const files = ['SKILL.md', 'config.json', 'README.md'];
+          fs.mkdirSync(skillDir, { recursive: true });
+          
+          let installed = false;
+          for (const file of files) {
+            const url = `https://raw.githubusercontent.com/${SKILLS_REPO}/${SKILLS_BRANCH}/skills/${skill}/${file}`;
+            try {
+              const content = require('child_process').execSync(
+                `curl -sf "${url}"`,
+                { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+              );
+              if (content) {
+                fs.writeFileSync(path.join(skillDir, file), content);
+                if (file === 'SKILL.md') installed = true;
+              }
+            } catch (e) {
+              // Optional files may not exist
+            }
+          }
+          
+          if (installed) {
+            console.log(`${colors.green}✓${colors.reset}`);
+          } else {
+            console.log(`${colors.yellow}not found${colors.reset}`);
+            fs.rmSync(skillDir, { recursive: true, force: true });
+          }
+        } catch (e) {
+          console.log(`${colors.red}failed${colors.reset}`);
+        }
       }
       
-      console.log(`\n${colors.dim}Run "skunk list" to verify skills.${colors.reset}`);
+      console.log('');
     }
   }
   
