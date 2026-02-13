@@ -69,6 +69,12 @@ switch (command) {
   case 'status':
     checkStatus();
     break;
+  case 'versions':
+    showVersions(null);
+    break;
+  case 'version':
+    showVersions(args[1]);
+    break;
   case 'update':
     handleUpdate();
     break;
@@ -467,6 +473,64 @@ async function checkStatus() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Versions - Simple version lookup
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function showVersions(plugin) {
+  const versionsUrl = 'https://skunkglobal.com/api/plugins/versions';
+  
+  try {
+    const data = await new Promise((resolve, reject) => {
+      https.get(versionsUrl, { headers: { 'User-Agent': 'skunk-cli' } }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            reject(new Error('Invalid response'));
+          }
+        });
+      }).on('error', reject);
+    });
+    
+    if (!data.plugins) {
+      error('Failed to fetch versions');
+      return;
+    }
+    
+    // Single plugin lookup
+    if (plugin) {
+      // Normalize: skunkcrm, crm, skunk-crm all -> skunkcrm
+      const slug = plugin.replace(/^skunk-?/, '').toLowerCase();
+      const fullSlug = `skunk${slug}`;
+      
+      const info = data.plugins[fullSlug] || data.plugins[slug];
+      
+      if (info) {
+        console.log(info.version);
+      } else {
+        error(`Unknown plugin: ${plugin}`);
+        console.log(`\n${colors.dim}Available: skunkcrm, skunkforms, skunkpages${colors.reset}`);
+      }
+      return;
+    }
+    
+    // All plugins
+    console.log('');
+    for (const [slug, info] of Object.entries(data.plugins)) {
+      if (info.type === 'free') {
+        console.log(`${info.name}: ${colors.cyan}${info.version}${colors.reset}`);
+      }
+    }
+    console.log('');
+    
+  } catch (e) {
+    error('Failed to fetch versions: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Update
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -528,6 +592,8 @@ ${colors.bright}Usage:${colors.reset}
   skunk available                   List available skills
   skunk plugins                     List available plugins
   skunk status                      Check plugin versions (+ compare if in WP site)
+  skunk versions                    Show latest versions of all plugins
+  skunk version <plugin>            Show latest version of a specific plugin
   skunk update                      Update CLI and refresh skills
   skunk help                        Show this help
 
