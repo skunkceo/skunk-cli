@@ -78,6 +78,9 @@ switch (command) {
   case 'update':
     handleUpdate();
     break;
+  case 'doctor':
+    runDoctor();
+    break;
   case 'setup':
     runSetup();
     break;
@@ -611,12 +614,18 @@ function runSetup() {
   require(setupPath);
 }
 
+function runDoctor() {
+  const doctorPath = path.join(__dirname, 'doctor.js');
+  require(doctorPath);
+}
+
 function showHelp() {
   console.log(`
 ${colors.bright}🦨 Skunk CLI${colors.reset} - AI-Powered WordPress Toolkit
 
 ${colors.bright}Usage:${colors.reset}
   skunk setup                       Interactive setup wizard
+  skunk doctor                      Diagnose your setup and check health
   skunk install skill <name>        Install an AI skill
   skunk install plugin <name>       Install a WordPress plugin
   skunk remove skill <name>         Remove an installed skill
@@ -631,6 +640,7 @@ ${colors.bright}Usage:${colors.reset}
 
 ${colors.bright}Examples:${colors.reset}
   skunk setup                       # Full guided setup
+  skunk doctor                      # Check if everything is working
   skunk install skill skunkforms    # Install SkunkForms AI skill
   skunk install plugin skunkforms   # Install SkunkForms WP plugin
   skunk install plugin skunkcrm-pro --license=XXXX
